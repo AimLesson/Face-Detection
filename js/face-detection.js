@@ -1,72 +1,58 @@
-const webcamElement = document.getElementById('webcam');
-const webcam = new Webcam(webcamElement, 'user');
-const modelPath = 'models';
-let displaySize;
-let canvas;
-let faceDetection;
+// List of quotes
 const quotes = [
-    "Believe in yourself!",
-    "You're doing great!",
-    "Keep smiling!",
-    "Stay positive!",
-    "You are capable of amazing things!"
+  "Believe in yourself!",
+  "Stay positive, work hard, make it happen.",
+  "Dream big and dare to fail.",
+  "Success is not final, failure is not fatal: It is the courage to continue that counts.",
+  "Keep going. Everything you need will come to you at the perfect time."
 ];
 
-// Automatically start the webcam and face detection on load
-$(document).ready(function () {
-    startWebcamAndDetection();
+// Function to get a random quote
+function getRandomQuote() {
+  return quotes[Math.floor(Math.random() * quotes.length)];
+}
+
+// Initialize face detection
+const webcamElement = document.getElementById("webcam");
+const webcam = new Webcam(webcamElement, "user");
+let faceDetection;
+let canvas;
+let displaySize = { width: 640, height: 480 };
+
+// Start detection when the checkbox is toggled
+$("#webcam-switch").change(function () {
+  if (this.checked) {
+    webcam.start()
+      .then(() => {
+        startDetection();
+      })
+      .catch(displayError);
+  } else {
+    stopDetection();
+    webcam.stop();
+  }
 });
 
-function startWebcamAndDetection() {
-    webcam.start()
-        .then(() => {
-            cameraStarted();
-            return loadFaceDetectionModel();
-        })
-        .catch(err => displayError());
-}
-
-async function loadFaceDetectionModel() {
-    $(".loading").removeClass('d-none');
-    await faceapi.nets.tinyFaceDetector.load(modelPath);
-    $(".loading").addClass('d-none');
-    createCanvas();
-    startDetection();
-}
-
-function createCanvas() {
-    if (!document.querySelector("canvas")) {
-        canvas = faceapi.createCanvasFromMedia(webcamElement);
-        document.getElementById('webcam-container').append(canvas);
-        faceapi.matchDimensions(canvas, displaySize);
-    }
-}
-
+// Start face detection
 function startDetection() {
-    faceDetection = setInterval(async () => {
-        const detections = await faceapi.detectAllFaces(webcamElement, new faceapi.TinyFaceDetectorOptions());
-        const resizedDetections = faceapi.resizeResults(detections, displaySize);
-
-        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-        if (detections.length > 0) {
-            faceapi.draw.drawDetections(canvas, resizedDetections);
-            showQuote();
-        } else {
-            $("#quoteMsg").addClass("d-none");
-        }
-    }, 300);
+  faceDetection = setInterval(async () => {
+    const detections = await faceapi.detectAllFaces(webcamElement, new faceapi.TinyFaceDetectorOptions());
+    if (detections.length > 0) {
+      console.log("Face detected!");
+      $("#quoteContent").text(getRandomQuote());
+      setTimeout(() => {
+        $("#quoteModal").modal("show");
+      }, 500); // Small delay for stability
+    }
+  }, 300);
 }
 
-function showQuote() {
-    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-    $("#quoteText").text(randomQuote);
-    $("#quoteMsg").removeClass("d-none");
+// Stop face detection
+function stopDetection() {
+  clearInterval(faceDetection);
 }
 
-function cameraStarted() {
-    $("#errorMsg").addClass("d-none");
-}
-
-function displayError() {
-    $("#errorMsg").removeClass("d-none");
+// Error handling
+function displayError(err = "") {
+  $("#errorMsg").html(err).removeClass("d-none");
 }
