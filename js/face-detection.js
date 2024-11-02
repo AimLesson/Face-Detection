@@ -1,144 +1,72 @@
 const webcamElement = document.getElementById('webcam');
 const webcam = new Webcam(webcamElement, 'user');
 const modelPath = 'models';
-let currentStream;
 let displaySize;
-let convas;
+let canvas;
 let faceDetection;
+const quotes = [
+    "Believe in yourself!",
+    "You're doing great!",
+    "Keep smiling!",
+    "Stay positive!",
+    "You are capable of amazing things!"
+];
 
-$("#webcam-switch").change(function () {
-  if(this.checked){
-      webcam.start()
-          .then(result =>{
-             cameraStarted();
-             webcamElement.style.transform = "";
-             console.log("webcam started");
-          })
-          .catch(err => {
-              displayError();
-          });
-  }
-  else {        
-      cameraStopped();
-      webcam.stop();
-      console.log("webcam stopped");
-  }        
+// Automatically start the webcam and face detection on load
+$(document).ready(function () {
+    startWebcamAndDetection();
 });
 
-$('#cameraFlip').click(function() {
-    webcam.flip();
+function startWebcamAndDetection() {
     webcam.start()
-    .then(result =>{ 
-      webcamElement.style.transform = "";
-    });
-});
+        .then(() => {
+            cameraStarted();
+            return loadFaceDetectionModel();
+        })
+        .catch(err => displayError());
+}
 
-$("#webcam").bind("loadedmetadata", function () {
-  displaySize = { width:this.scrollWidth, height: this.scrollHeight }
-});
-
-$("#detection-switch").change(function () {
-  if(this.checked){
-    toggleContrl("box-switch", true);
-    toggleContrl("landmarks-switch", true);
-    toggleContrl("expression-switch", true);
-    toggleContrl("age-gender-switch", true);
-    $("#box-switch").prop('checked', true);
+async function loadFaceDetectionModel() {
     $(".loading").removeClass('d-none');
-    Promise.all([
-      faceapi.nets.tinyFaceDetector.load(modelPath),
-      faceapi.nets.faceLandmark68TinyNet.load(modelPath),
-      faceapi.nets.faceExpressionNet.load(modelPath),
-      faceapi.nets.ageGenderNet.load(modelPath)
-    ]).then(function(){
-      createCanvas();
-      startDetection();
-    })
-  }
-  else {
-    clearInterval(faceDetection);
-    toggleContrl("box-switch", false);
-    toggleContrl("landmarks-switch", false);
-    toggleContrl("expression-switch", false);
-    toggleContrl("age-gender-switch", false);
-    if(typeof canvas !== "undefined"){
-      setTimeout(function() {
-        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-      }, 1000);
-    }
-  }        
-});
-
-function createCanvas(){
-  if( document.getElementsByTagName("canvas").length == 0 )
-  {
-    canvas = faceapi.createCanvasFromMedia(webcamElement)
-    document.getElementById('webcam-container').append(canvas)
-    faceapi.matchDimensions(canvas, displaySize)
-  }
+    await faceapi.nets.tinyFaceDetector.load(modelPath);
+    $(".loading").addClass('d-none');
+    createCanvas();
+    startDetection();
 }
 
-function toggleContrl(id, show){
-  if(show){
-    $("#"+id).prop('disabled', false);
-    $("#"+id).parent().removeClass('disabled');
-  }else{
-    $("#"+id).prop('checked', false).change();
-    $("#"+id).prop('disabled', true);
-    $("#"+id).parent().addClass('disabled');
-  }
+function createCanvas() {
+    if (!document.querySelector("canvas")) {
+        canvas = faceapi.createCanvasFromMedia(webcamElement);
+        document.getElementById('webcam-container').append(canvas);
+        faceapi.matchDimensions(canvas, displaySize);
+    }
 }
 
-function startDetection(){
-  faceDetection = setInterval(async () => {
-    const detections = await faceapi.detectAllFaces(webcamElement, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks(true).withFaceExpressions().withAgeAndGender()
-    const resizedDetections = faceapi.resizeResults(detections, displaySize)
-    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-    if($("#box-switch").is(":checked")){
-      faceapi.draw.drawDetections(canvas, resizedDetections)
-    }
-    if($("#landmarks-switch").is(":checked")){
-      faceapi.draw.drawFaceLandmarks(canvas, resizedDetections)
-    }
-    if($("#expression-switch").is(":checked")){
-      faceapi.draw.drawFaceExpressions(canvas, resizedDetections)
-    }
-    if($("#age-gender-switch").is(":checked")){
-      resizedDetections.forEach(result => {
-        const { age, gender, genderProbability } = result
-        new faceapi.draw.DrawTextField(
-          [
-            `${faceapi.round(age, 0)} years`,
-            `${gender} (${faceapi.round(genderProbability)})`
-          ],
-          result.detection.box.bottomRight
-        ).draw(canvas)
-      })
-    }
-    
-    if(!$(".loading").hasClass('d-none')){
-      $(".loading").addClass('d-none')
-    }
-  }, 300)
+function startDetection() {
+    faceDetection = setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(webcamElement, new faceapi.TinyFaceDetectorOptions());
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        if (detections.length > 0) {
+            faceapi.draw.drawDetections(canvas, resizedDetections);
+            showQuote();
+        } else {
+            $("#quoteMsg").addClass("d-none");
+        }
+    }, 300);
 }
 
-function cameraStarted(){
-  toggleContrl("detection-switch", true);
-  $("#errorMsg").addClass("d-none");
-  if( webcam.webcamList.length > 1){
-    $("#cameraFlip").removeClass('d-none');
-  }
+function showQuote() {
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+    $("#quoteText").text(randomQuote);
+    $("#quoteMsg").removeClass("d-none");
 }
 
-function cameraStopped(){
-  toggleContrl("detection-switch", false);
-  $("#errorMsg").addClass("d-none");
-  $("#cameraFlip").addClass('d-none');
+function cameraStarted() {
+    $("#errorMsg").addClass("d-none");
 }
 
-function displayError(err = ''){
-  if(err!=''){
-      $("#errorMsg").html(err);
-  }
-  $("#errorMsg").removeClass("d-none");
+function displayError() {
+    $("#errorMsg").removeClass("d-none");
 }
